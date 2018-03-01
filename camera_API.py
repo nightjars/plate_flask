@@ -64,8 +64,9 @@ def cam_heartbeat():
     return flask.jsonify({'ok': True})
 
 
-def move_queue_to_event():
-    for car in db.plate_read_queue.find():
+def move_queue_to_event(id=None):
+    car_queue_data = [db.plate_read_queue.find_one({'_id': id})] if id is not None else db.plate_read_queue.find()
+    for car in car_queue_data:
         db.plate_read_queue.delete_one(car)
         db.plate_read_queue_processed.save(car)
         if 'confidence' not in car:
@@ -130,12 +131,12 @@ def process_alert(plate):
 @camera_api.route('/camera_api/event/save', methods=['POST'])
 def cam_save_event():
     data = bson.json_util.loads(flask.request.data)
-    db.plate_read_queue.insert_one({
+    id = db.plate_read_queue.insert_one({
         'plate': data['plate'],
         'image': db.fs.put(data['image']),
         'date_time': datetime.datetime.utcnow(),
         'confidence': data['confidence'],
         'raw_data': data['raw_data'],
-        'camera_id': data['camera_id']})
-    move_queue_to_event()
+        'camera_id': data['camera_id']}).inserted_id
+    move_queue_to_event(id)
     return flask.jsonify({'ok': True})
