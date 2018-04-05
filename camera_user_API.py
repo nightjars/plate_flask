@@ -9,7 +9,7 @@ from bson.objectid import ObjectId
 import PIL
 import io
 import json
-import db
+import flask_plate
 
 
 camera_user_api = flask.Blueprint('camera_user_api', __name__)
@@ -19,7 +19,7 @@ camera_user_api = flask.Blueprint('camera_user_api', __name__)
 @flask_jwt.jwt_required()
 def get_cameras():
     cameras = []
-    cam_db = db.cam_collection.find()
+    cam_db = flask_plate.db.cam_collection.find()
     for cam in cam_db:
         cam['id'] = str(cam['_id'])
         if cam['id'] in camera_API.cam_status:
@@ -53,7 +53,7 @@ def get_cam_image_json(camera_id):
 
 @camera_user_api.route('/api/camera/get/motion_image/<camera_id>')
 def get_cam_motion_image(camera_id):
-    cam = db.cam_collection.find_one({'_id': ObjectId(camera_id)})
+    cam = flask_plate.db.cam_collection.find_one({'_id': ObjectId(camera_id)})
     if cam is not None:
         if camera_id in camera_API.cam_status:
             cam_img_bytes = camera_API.cam_status[camera_id]['latest_image']
@@ -74,7 +74,7 @@ def sample_motion_image():
     y2 = flask.request.args.get('y2', default=None, type=int)
     id = flask.request.args.get('id', default=None, type=str)
     if x1 is not None or x2 is not None or y1 is not None or y2 is not None or id is not None:
-        cam = db.cam_collection.find_one({'_id': ObjectId(id)})
+        cam = flask_plate.db.cam_collection.find_one({'_id': ObjectId(id)})
         if cam is not None:
             if cam['running']:
                 if id in camera_API.cam_status:
@@ -104,10 +104,10 @@ def set_camera_detection_area():
     data = json.loads(flask.request.data)
     user = flask_jwt.current_identity
     if user.adminAccess:
-        cam = db.cam_collection.find_one({'_id': ObjectId(data['camera_id'])})
+        cam = flask_plate.db.cam_collection.find_one({'_id': ObjectId(data['camera_id'])})
         if cam:
             cam['mask_image'] = image_processing.create_mask_image(data['x1'], data['y1'], data['x2'], data['y2'])
-            db.cam_collection.save(cam)
+            flask_plate.db.cam_collection.save(cam)
             return flask.jsonify({'ok': True})
         return flask.jsonify({'ok': False, 'error': "Error loading camera."})
     return flask.jsonify({'ok': False, 'error': "Requires admin access."})

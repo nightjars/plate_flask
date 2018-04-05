@@ -1,12 +1,24 @@
 import werkzeug.security
-import db
 from bson.objectid import ObjectId
 import flask
 import flask_jwt
 import json
 
+
 user_api = flask.Blueprint('user_api', __name__)
 
+
+def authenticate(username, password):
+    user = db.users_collection.find_one({'username': username})
+    if user and werkzeug.security.check_password_hash(user['password'], password):
+        return User(**user)
+
+
+def identity(payload):
+    user_id = payload['identity']
+    return User(**flask_plate.db.users_collection.find_one({'_id': ObjectId(user_id)}))
+
+import flask_plate
 
 class User(object):
     def __init__(self, username="", password="", _id=None, writeAccess=False, adminAccess=False):
@@ -20,17 +32,6 @@ class User(object):
         self.password = ''
 
 
-def authenticate(username, password):
-    user = db.users_collection.find_one({'username': username})
-    if user and werkzeug.security.check_password_hash(user['password'], password):
-        return User(**user)
-
-
-def identity(payload):
-    user_id = payload['identity']
-    return User(**db.users_collection.find_one({'_id': ObjectId(user_id)}))
-
-
 @user_api.route('/api/user/change_password', methods=['POST'])
 @flask_jwt.jwt_required()
 def change_password():
@@ -38,10 +39,10 @@ def change_password():
     user = flask_jwt.current_identity
     fail_reason = ""
     if user.authenticate(user.username, data['currentPassword']):
-        user = db.users_collection.find_one({'username': user.username})
+        user = flask_plate.db.users_collection.find_one({'username': user.username})
         if 'newPassword' in data and len(data['newPassword']) > 4:
             user['password'] = werkzeug.security.generate_password_hash(data['newPassword'])
-            db.users_collection.save(user)
+            flask_plate.db.users_collection.save(user)
             return flask.jsonify({'ok': True})
         else:
             fail_reason = "New password too short."
@@ -54,7 +55,7 @@ def change_password():
 @flask_jwt.jwt_required()
 def get_permissions():
     user = flask_jwt.current_identity
-    user = User(**db.users_collection.find_one({'username': user.username}))
+    user = User(**flask_plate.db.users_collection.find_one({'username': user.username}))
     return flask.jsonify({'writeAccess': user.writeAccess, 'adminAccess': user.adminAccess})
 
 
@@ -74,9 +75,9 @@ def create_user():
         if len(user['username']) < 5:
             fail_reason = "Username too short."
         if not fail:
-            if db.users_collection.find({'username': user['username']}).count() == 0:
+            if flask_plate.db.users_collection.find({'username': user['username']}).count() == 0:
                 user['password'] = werkzeug.security.generate_password_hash(user['password'])
-                db.users_collection.save(user)
+                flask_plate.db.users_collection.save(user)
                 return flask.jsonify({'ok': True})
             else:
                 fail = True
@@ -89,7 +90,7 @@ def create_user():
 def get_users():
     user = flask_jwt.current_identity
     if user.adminAccess:
-        users = db.users_collection.find()
+        users = flask_plate.db.users_collection.find()
         user_list = []
         for user in users:
             userObj = User(**user)
@@ -104,14 +105,14 @@ def modify_user():
     user = flask_jwt.current_identity
     if user.adminAccess:
         data = json.loads(flask.request.data)
-        db_user = db.users_collection.find_one({'username': data['username']})
+        db_user = flask_plate.db.users_collection.find_one({'username': data['username']})
         if len(db_user):
             for key, value in data.items():
                 if key == 'password' and value is not None and len(value):
                     db_user['password'] = werkzeug.security.generate_password_hash(value)
                 if key == 'writeAccess' or key == 'adminAccess':
                     db_user[key] = value
-            db.users_collection.save(db_user)
+            flask_plate.db.users_collection.save(db_user)
             return flask.jsonify({'ok': True})
         else:
             return flask.jsonify({'ok': False})
@@ -123,8 +124,8 @@ def delete_user():
     user = flask_jwt.current_identity
     if user.adminAccess:
         data = json.loads(flask.request.data)
-        if db.users_collection.find({'username': data['username']}).count() == 1:
-            db.users_collection.delete_one({'username': data['username']})
+        if flask_plate.db.users_collection.find({'username': data['username']}).count() == 1:
+            flask_plate.db.users_collection.delete_one({'username': data['username']})
             return flask.jsonify({'ok': True})
         return flask.jsonify({'ok': False})
 

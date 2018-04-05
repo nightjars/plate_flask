@@ -7,7 +7,8 @@ import camera_API
 import camera_user_API
 import vehicle_API
 import image_API
-
+import argparse
+import db
 
 app = Flask(__name__)
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
@@ -21,6 +22,10 @@ app.register_blueprint(vehicle_API.vehicle_api)
 app.register_blueprint(image_API.image_api)
 jwt = flask_jwt.JWT(app, user_API.authenticate, user_API.identity)
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--db', help='IP address of MongoDB server')
+parser.add_argument('--host', help='IP address to bind API server to')
+db = db.db(parser.parse_args().db)
 
 if __name__ == '__main__':
-    app.run(host='192.168.1.99', threaded=True)
+    app.run(host=parser.parse_args().host, threaded=True)

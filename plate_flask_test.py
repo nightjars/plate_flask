@@ -15,6 +15,7 @@ vehicle_details_url = '/api/vehicle/details/{}'
 #delete_alert_url = '/api/vehicle/alert/delete'
 #get_alerts_param = '/api/vehicle/alert/get/{}'
 #get_alerts_all = '/api/vehicle/alert/get'
+change_plate_url = '/api/vehicle/correct_plate'
 
 class MyTestCase(unittest.TestCase):
 
@@ -69,15 +70,25 @@ class MyTestCase(unittest.TestCase):
         self.assertTrue('event_list' in details)
 
     def test_set_note(self):
-        user = self.login_read_only()
+        user = self.login_write()
         search = requests.get(host + search_vehicles_url, params=search_vehicles_params,
                               headers=self.auth_header(user)).json()
         vehicle = search['results'][0]
         details = requests.get(host + vehicle_details_url.format(vehicle['id']), headers=self.auth_header(user)).json()
         old_note = details['note']
-
         requests.post(host + set_vehicle_note_url, headers=self.auth_header(user),
                       json={'id': details['id'], 'note': 'Test Note'})
+        details = requests.get(host + vehicle_details_url.format(vehicle['id']), headers=self.auth_header(user)).json()
+        new_note = details['note']
+        requests.post(host + set_vehicle_note_url, headers=self.auth_header(user),
+                      json={'id': details['id'], 'note': old_note})
+        self.assertTrue(new_note == 'Test Note', "Note should be 'Test Note', but is {}".format(new_note))
+
+#    def test_change_plate(self):
+#        user = self.login_write()
+#        resp = requests.post(host + change_plate_url, headers=self.auth_header(user),
+#                             json={'id': '5a9db54a8292510b84524bde', 'plate': 'AWN7889'}).json()
+#        self.assertTrue(resp['ok'])
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,4 +1,4 @@
-import db
+import flask_plate
 import datetime
 from bson.objectid import ObjectId
 import json
@@ -7,7 +7,7 @@ import re
 import flask_jwt
 import dateutil.parser
 import pymongo
-
+import camera_API
 
 vehicle_api = flask.Blueprint('vehicle_api', __name__)
 
@@ -23,12 +23,12 @@ def mangle_id(input):
 @flask_jwt.jwt_required()
 def get_garages():
     now = datetime.datetime.now()
-    all_cars = db.car_list_collection.find({"show": True}).sort("date_time", pymongo.DESCENDING)
+    all_cars = flask_plate.db.car_list_collection.find({"show": True}).sort("date_time", pymongo.DESCENDING)
     vehicles = []
     for car in all_cars:
-        vehicle_data = db.car_list_collection.find_one({"_id": ObjectId(car['_id'])})
-        newest_event = db.event_collection.find_one({"_id": ObjectId(vehicle_data['event_list'][-1])})
-        alerts_present = False if db.alerts_collection.find_one({"plate": car['plate']}) is None else True
+        vehicle_data = flask_plate.db.car_list_collection.find_one({"_id": ObjectId(car['_id'])})
+        newest_event = flask_plate.db.event_collection.find_one({"_id": ObjectId(vehicle_data['event_list'][-1])})
+        alerts_present = False if flask_plate.db.alerts_collection.find_one({"plate": car['plate']}) is None else True
         vehicles.append({'plate': car['plate'],
                          'date_time': car['date_time'],
                          'newest_image': str(newest_event['image']),
@@ -36,11 +36,11 @@ def get_garages():
                          'note': car['note'] if 'note' in car else '',
                          'alerts': alerts_present})
     counts = {
-        '24h': db.event_collection.find({'date_time': {"$gt": datetime.datetime.utcnow() -
+        '24h': flask_plate.db.event_collection.find({'date_time': {"$gt": datetime.datetime.utcnow() -
                                                            datetime.timedelta(days=1)}}).count(),
-        '1w': db.event_collection.find({'date_time': {"$gt": datetime.datetime.utcnow() -
+        '1w': flask_plate.db.event_collection.find({'date_time': {"$gt": datetime.datetime.utcnow() -
                                                            datetime.timedelta(days=7)}}).count(),
-        '1mo': db.event_collection.find({'date_time': {"$gt": datetime.datetime.utcnow() -
+        '1mo': flask_plate.db.event_collection.find({'date_time': {"$gt": datetime.datetime.utcnow() -
                                                              datetime.timedelta(days=30)}}).count(),
     }
     response = flask.jsonify({'vehicles': vehicles,
@@ -68,22 +68,23 @@ def search_vehicle():
 
     time_from_utc = datetime.datetime.now() - datetime.datetime.utcnow()
 
-    all_events = db.event_collection.find({'$and': [{'date_time': {'$gte': dateutil.parser.parse(start_date)
+    all_events = flask_plate.db.event_collection.find({'$and': [{'date_time': {'$gte': dateutil.parser.parse(start_date)
                                                                         - time_from_utc}},
                                                  {'date_time': {'$lte': dateutil.parser.parse(end_date)
                                                                         - time_from_utc + datetime.timedelta(days=1)}},
-                                                 {'plate': {'$regex': plate_regex, '$options': 'i'}}]})
+                                                 {'plate': {'$regex': plate_regex, '$options': 'i'}}]}).\
+                                                  sort("date_time", pymongo.DESCENDING)
 
     event_list = []
     for event in all_events:
-        vehicle_data = db.car_list_collection.find_one({"plate": event['plate']})
+        vehicle_data = flask_plate.db.car_list_collection.find_one({"plate": event['plate']})
         if len(note) and 'note' in vehicle_data and re.search(note_regex, vehicle_data['note'],
                                                               flags=re.IGNORECASE) is None:
             pass
         elif len(note) and 'note' not in vehicle_data:
             pass
         else:
-            alerts_present = False if db.alerts_collection.find_one({"plate": event['plate']}) is None else True
+            alerts_present = False if flask_plate.db.alerts_collection.find_one({"plate": event['plate']}) is None else True
             event_list.append({'plate': event['plate'],
                                'date_time': event['date_time'],
                                'id': str(event['_id']),
@@ -99,10 +100,10 @@ def delete_vehicle():
     user = flask_jwt.current_identity
     if user.writeAccess:
         data = json.loads(flask.request.data)
-        vehicle = db.car_list_collection.find_one({"_id": ObjectId(data['id'])})
+        vehicle = flask_plate.db.car_list_collection.find_one({"_id": ObjectId(data['id'])})
         if vehicle is not None:
             vehicle["show"] = False
-            db.car_list_collection.save(vehicle)
+            flask_plate.db.car_list_collection.save(vehicle)
         response = flask.Response()
         return response
     else:
@@ -115,10 +116,10 @@ def set_note():
     user = flask_jwt.current_identity
     if user.writeAccess:
         data = json.loads(flask.request.data)
-        vehicle = db.car_list_collection.find_one({"_id": ObjectId(data['id'])})
+        vehicle = flask_plate.db.car_list_collection.find_one({"_id": ObjectId(data['id'])})
         if vehicle is not None and 'note' in data:
             vehicle['note'] = data['note']
-            db.car_list_collection.save(vehicle)
+            flask_plate.db.car_list_collection.save(vehicle)
         response = flask.Response()
         return response
     else:
@@ -128,11 +129,11 @@ def set_note():
 @vehicle_api.route('/api/vehicle/details/<vehicle_id>', methods=['GET'])
 @flask_jwt.jwt_required()
 def details_vehicle(vehicle_id):
-    vehicle = db.car_list_collection.find_one({"_id": ObjectId(vehicle_id)})
+    vehicle = flask_plate.db.car_list_collection.find_one({"_id": ObjectId(vehicle_id)})
     if vehicle is None:
-        event_vehicle = db.event_collection.find_one({"_id": ObjectId(vehicle_id)})
+        event_vehicle = flask_plate.db.event_collection.find_one({"_id": ObjectId(vehicle_id)})
         if event_vehicle is not None:
-            vehicle = db.car_list_collection.find_one({"plate": event_vehicle['plate']})
+            vehicle = flask_plate.db.car_list_collection.find_one({"plate": event_vehicle['plate']})
     if vehicle is not None:
         if 'note' not in vehicle:
             vehicle['note'] = ''
@@ -140,11 +141,11 @@ def details_vehicle(vehicle_id):
         events = []
         mangle_id(vehicle)
         for event in reversed(vehicle['event_list']):
-            events.append(db.event_collection.find_one({"_id": ObjectId(event)}))
+            events.append(flask_plate.db.event_collection.find_one({"_id": ObjectId(event)}))
             mangle_id(events[-1])
             if 'camera_id' in events[-1]:
                 del events[-1]['camera_id']
-        alerts_present = False if db.alerts_collection.find_one({"plate": vehicle['plate']}) is None else True
+        alerts_present = False if flask_plate.db.alerts_collection.find_one({"plate": vehicle['plate']}) is None else True
         vehicle['event_list'] = events
         vehicle['alerts'] = alerts_present
         return flask.jsonify(vehicle)
@@ -160,7 +161,7 @@ def create_alert():
         data = json.loads(flask.request.data)
         alert = {'plate': data['plate'],
                  'email': data['email']}
-        db.alerts_collection.save(alert)
+        flask_plate.db.alerts_collection.save(alert)
         return flask.jsonify({'ok': True})
     else:
         return flask.jsonify({'ok': False})
@@ -172,7 +173,7 @@ def delete_alert():
     user = flask_jwt.current_identity
     if user.writeAccess:
         data = json.loads(flask.request.data)
-        db.alerts_collection.delete_one({'_id': ObjectId(data['id'])})
+        flask_plate.db.alerts_collection.delete_one({'_id': ObjectId(data['id'])})
         return flask.jsonify({'ok': True})
     else:
         return flask.jsonify({'ok': False})
@@ -183,10 +184,47 @@ def delete_alert():
 @flask_jwt.jwt_required()
 def get_alerts(plate):
     if plate is None:
-        result = db.alerts_collection.find()
+        result = flask_plate.db.alerts_collection.find()
     else:
-        result = db.alerts_collection.find({'plate': plate})
+        result = flask_plate.db.alerts_collection.find({'plate': plate})
     response = []
     for entry in result:
         response.append({'plate': entry['plate'], 'id': str(entry['_id']), 'email': entry['email']})
     return flask.jsonify(response)
+
+
+@vehicle_api.route('/api/vehicle/get_event/<event_id>', methods=['GET'])
+@flask_jwt.jwt_required()
+def get_event(event_id):
+    event = flask_plate.db.event_collection.find_one({'_id': ObjectId(event_id)})
+    if event:
+        event['id'] = str(event['_id'])
+        del event['_id']
+        event['camera_id'] = str(event['camera_id']) if 'camera_id' in event else "db needs refactoring"
+        event['image'] = str(event['image'])
+        return flask.jsonify(event)
+    else:
+        flask.abort(404)
+
+
+@vehicle_api.route('/api/vehicle/correct_plate', methods=['POST'])
+@flask_jwt.jwt_required()
+def correct_plate():
+    user = flask_jwt.current_identity
+    if user.writeAccess:
+        data = json.loads(flask.request.data)
+        event = flask_plate.db.event_collection.find_one({'_id': ObjectId(data['id'])})
+        vehicle_entry = flask_plate.db.car_list_collection.find_one({'plate': event['plate']})
+        vehicle_entry['event_list'].remove(ObjectId(data['id']))
+        if len(vehicle_entry['event_list']):
+            flask_plate.db.car_list_collection.save(vehicle_entry)
+        else:
+            flask_plate.db.car_list_collection.delete_one({'_id': vehicle_entry['_id']})
+        event['plate'] = data['plate']
+        flask_plate.db.plate_read_queue.save(event)
+        flask_plate.db.event_collection.delete_one({'_id': event['_id']})
+        flask_plate.db.plate_read_queue_processed.delete_one({'_id': event['_id']})
+        camera_API.move_queue_to_event(id=event['_id'])
+        return flask.jsonify({'ok': True})
+    else:
+        return flask.jsonify({'ok': False})

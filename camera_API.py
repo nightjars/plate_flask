@@ -1,4 +1,4 @@
-import db
+import flask_plate
 import datetime
 import bson
 import bson.json_util
@@ -20,7 +20,7 @@ same_event_timespan = 5 * 60  # seconds
 @camera_api.route('/camera_api/get_available_cam', methods=['GET'])
 def cam_service_get_cam():
     def tend_cameras():
-        cams = db.cam_collection.find()
+        cams = flask_plate.db.cam_collection.find()
         for cam in cams:
             id = str(cam['_id'])
             if cam['running']:
@@ -34,10 +34,10 @@ def cam_service_get_cam():
                         reset = False
                 if reset:
                     cam['running'] = False
-                    db.cam_collection.find_and_modify(query={'_id': cam['_id']}, update={'$set': {'running': False}})
+                    flask_plate.db.cam_collection.find_and_modify(query={'_id': cam['_id']}, update={'$set': {'running': False}})
 
     tend_cameras()
-    cam_config = db.cam_collection.find_and_modify \
+    cam_config = flask_plate.db.cam_collection.find_and_modify \
         (query={'running': False},
          update={'$set': {'running': True}})
     if cam_config:
@@ -51,7 +51,7 @@ def cam_service_get_cam():
 def cam_service_stop_cam():
     data = json.loads(flask.request.data)
     cam_id = ObjectId(data['camera'])
-    db.cam_collection.find_and_modify(query={'_id': cam_id},
+    flask_plate.db.cam_collection.find_and_modify(query={'_id': cam_id},
                                       update={'$set': {'running': False}})
     return flask.jsonify({'ok': True})
 
@@ -65,13 +65,11 @@ def cam_heartbeat():
 
 
 def move_queue_to_event(id=None):
-    car_queue_data = [db.plate_read_queue.find_one({'_id': id})] if id is not None else db.plate_read_queue.find()
+    car_queue_data = [flask_plate.db.plate_read_queue.find_one({'_id': id})] if id is not None else db.plate_read_queue.find()
     for car in car_queue_data:
-        db.plate_read_queue.delete_one(car)
-        db.plate_read_queue_processed.save(car)
-        if 'confidence' not in car:
-            car['confidence'] = 70
-        same_event = db.event_collection.find_one({'plate': car['plate'],
+        flask_plate.db.plate_read_queue.delete_one(car)
+        flask_plate.db.plate_read_queue_processed.save(car)
+        same_event = flask_plate.db.event_collection.find_one({'plate': car['plate'],
                                                 'date_time': {
                                                     "$gte": car['date_time'] - datetime.timedelta(
                                                         seconds=same_event_timespan),
@@ -82,33 +80,34 @@ def move_queue_to_event(id=None):
             if same_event['confidence'] < car['confidence']:
                 same_event['image'] = car['image']
                 same_event['confidence'] = car['confidence']
-                db.event_collection.save(same_event)
+                same_event['raw_data'] = car['raw_data']
+                flask_plate.db.event_collection.save(same_event)
         else:
-            db.event_collection.insert_one(car)
+            flask_plate.db.event_collection.insert_one(car)
             populate_car_list(car)
 
 
 def populate_car_list(car):
     # car_view.remove({})
-    seen_before = db.car_list_collection.find_one({'plate': car['plate']})
+    seen_before = flask_plate.db.car_list_collection.find_one({'plate': car['plate']})
     if seen_before is None:
         new_car_view_entry = {}
         new_car_view_entry['plate'] = car['plate']
         new_car_view_entry['event_list'] = [car['_id']]
         new_car_view_entry['show'] = True
         new_car_view_entry['date_time'] = car['date_time']
-        db.car_list_collection.save(new_car_view_entry)
+        flask_plate.db.car_list_collection.save(new_car_view_entry)
     else:
         if car['_id'] not in seen_before['event_list']:
             seen_before['event_list'].append(car['_id'])
             seen_before['date_time'] = max(seen_before['date_time'], car['date_time'])
             seen_before['show'] = True
-            db.car_list_collection.save(seen_before)
+            flask_plate.db.car_list_collection.save(seen_before)
     process_alert(car['plate'])
 
 
 def process_alert(plate):
-    alerts = db.alerts_collection.find()
+    alerts = flask_plate.db.alerts_collection.find()
     outgoing = {}
     for alert in alerts:
         if re.match(alert['plate'], plate) is not None:
@@ -131,9 +130,9 @@ def process_alert(plate):
 @camera_api.route('/camera_api/event/save', methods=['POST'])
 def cam_save_event():
     data = bson.json_util.loads(flask.request.data)
-    id = db.plate_read_queue.insert_one({
+    id = flask_plate.db.plate_read_queue.insert_one({
         'plate': data['plate'],
-        'image': db.fs.put(data['image']),
+        'image': flask_plate.db.fs.put(data['image']),
         'date_time': datetime.datetime.utcnow(),
         'confidence': data['confidence'],
         'raw_data': data['raw_data'],
