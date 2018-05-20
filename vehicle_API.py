@@ -102,7 +102,8 @@ def delete_vehicle():
         data = json.loads(flask.request.data)
         vehicle = flask_plate.db.car_list_collection.find_one({"_id": ObjectId(data['id'])})
         if vehicle is not None:
-            vehicle["show"] = False
+            vehicle['show'] = False
+            vehicle['first_seen'] = False
             flask_plate.db.car_list_collection.save(vehicle)
         response = flask.Response()
         return response

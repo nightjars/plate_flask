@@ -96,6 +96,7 @@ def populate_car_list(car):
         new_car_view_entry['event_list'] = [car['_id']]
         new_car_view_entry['show'] = True
         new_car_view_entry['date_time'] = car['date_time']
+        new_car_view_entry['first_seen'] = True
         flask_plate.db.car_list_collection.save(new_car_view_entry)
     else:
         if car['_id'] not in seen_before['event_list']:
