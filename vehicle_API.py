@@ -29,13 +29,14 @@ def get_garages():
         vehicle_data = flask_plate.db.car_list_collection.find_one({"_id": ObjectId(car['_id'])})
         newest_event = flask_plate.db.event_collection.find_one({"_id": ObjectId(vehicle_data['event_list'][-1])})
         alerts_present = False if flask_plate.db.alerts_collection.find_one({"plate": car['plate']}) is None else True
+        first_seen = True if 'first_seen' in car and car['first_seen'] is True else False
         vehicles.append({'plate': car['plate'],
                          'date_time': car['date_time'],
                          'newest_image': str(newest_event['image']),
                          'id': str(car['_id']),
                          'note': car['note'] if 'note' in car else '',
                          'alerts': alerts_present,
-                         'first_seen': car['first_seen']})
+                         'first_seen': first_seen})
     counts = {
         '24h': flask_plate.db.event_collection.find({'date_time': {"$gt": datetime.datetime.utcnow() -
                                                            datetime.timedelta(days=1)}}).count(),
