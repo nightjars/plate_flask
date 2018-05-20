@@ -9,6 +9,7 @@ import vehicle_API
 import image_API
 import argparse
 import db
+import reports_API
 
 app = Flask(__name__)
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
