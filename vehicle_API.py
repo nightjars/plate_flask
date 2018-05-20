@@ -34,7 +34,8 @@ def get_garages():
                          'newest_image': str(newest_event['image']),
                          'id': str(car['_id']),
                          'note': car['note'] if 'note' in car else '',
-                         'alerts': alerts_present})
+                         'alerts': alerts_present,
+                         'first_seen': car['first_seen']})
     counts = {
         '24h': flask_plate.db.event_collection.find({'date_time': {"$gt": datetime.datetime.utcnow() -
                                                            datetime.timedelta(days=1)}}).count(),
