@@ -6,7 +6,7 @@ import pymongo
 
 class db(object):
     def __init__(self, host):
-        self.client = pymongo.MongoClient('192.168.1.99')
+        self.client = pymongo.MongoClient(host)
         self.db = self.client['plate-db']
         self.event_collection = self.db['events']
         self.car_list_collection = self.db['car-view']

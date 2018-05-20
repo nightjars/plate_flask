@@ -7,9 +7,10 @@ import json
 
 user_api = flask.Blueprint('user_api', __name__)
 
+import flask_plate
 
 def authenticate(username, password):
-    user = db.users_collection.find_one({'username': username})
+    user = flask_plate.db.users_collection.find_one({'username': username})
     if user and werkzeug.security.check_password_hash(user['password'], password):
         return User(**user)
 
@@ -18,7 +19,7 @@ def identity(payload):
     user_id = payload['identity']
     return User(**flask_plate.db.users_collection.find_one({'_id': ObjectId(user_id)}))
 
-import flask_plate
+
 
 class User(object):
     def __init__(self, username="", password="", _id=None, writeAccess=False, adminAccess=False):
