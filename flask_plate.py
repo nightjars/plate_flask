@@ -21,6 +21,7 @@ app.register_blueprint(camera_user_API.camera_user_api)
 app.register_blueprint(user_API.user_api)
 app.register_blueprint(vehicle_API.vehicle_api)
 app.register_blueprint(image_API.image_api)
+app.register_blueprint(vehicle_API.vehicle_api)
 jwt = flask_jwt.JWT(app, user_API.authenticate, user_API.identity)
 
 parser = argparse.ArgumentParser()
